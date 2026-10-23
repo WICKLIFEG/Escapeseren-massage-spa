@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Serene Escape Massage & Spa | Beverly Hills, CA</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #2d5a27;
+      --primary-light: #4a7c43;
+      --accent: #d4af37;
+      --bg-light: #f8f9fa;
+      --card-bg-light: #ffffff;
+      --text-light: #2c3e50;
+      --bg-dark: #12181b;
+      --card-bg-dark: #1e272c;
+      --text-dark: #ecf0f1;
+      --shadow: 0 10px 30px rgba(0,0,0,0.08);
+      --transition: all 0.3s ease;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg-light);
+      color: var(--text-light);
+      transition: var(--transition);
+      line-height: 1.6;
+    }
+
+    body.dark-mode {
+      background-color: var(--bg-dark);
+      color: var(--text-dark);
+    }
+
+    header {
+      background: var(--card-bg-light);
+      box-shadow: var(--shadow);
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      transition: var(--transition);
+    }
+
+    body.dark-mode header {
+      background: var(--card-bg-dark);
+    }
+
+    .nav-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0.8rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo-container {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      text-decoration: none;
+    }
+
+    .logo-img {
+      width: 45px;
+      height: 45px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid var(--accent);
+    }
+
+    .logo-text {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    body.dark-mode .logo-text {
+      color: var(--accent);
+    }
+
+    .theme-toggle {
+      background: none;
+      border: none;
+      font-size: 1.25rem;
+      color: inherit;
+      cursor: pointer;
+      padding: 0.5rem;
+      border-radius: 50%;
+      transition: var(--transition);
+    }
+
+    .hero {
+      background: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url('https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=1200&q=80') center/cover;
+      color: white;
+      text-align: center;
+      padding: 6rem 1.5rem;
+    }
+
+    .hero h1 {
+      font-size: 2.8rem;
+      margin-bottom: 1rem;
+    }
+
+    .hero p {
+      font-size: 1.2rem;
+      max-width: 600px;
+      margin: 0 auto 2rem;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 3rem auto;
+      padding: 0 1.5rem;
+    }
+
+    .section-title {
+      text-align: center;
+      font-size: 2rem;
+      margin-bottom: 2rem;
+      color: var(--primary);
+    }
+
+    body.dark-mode .section-title {
+      color: var(--accent);
+    }
+
+    .filters {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 2.5rem;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      padding: 0.6rem 1.5rem;
+      border: 2px solid var(--primary);
+      background: transparent;
+      color: var(--primary);
+      border-radius: 30px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: var(--transition);
+    }
+
+    body.dark-mode .filter-btn {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .filter-btn.active, .filter-btn:hover {
+      background: var(--primary);
+      color: white;
+    }
+
+    body.dark-mode .filter-btn.active, body.dark-mode .filter-btn:hover {
+      background: var(--accent);
+      color: var(--bg-dark);
+    }
+
+    .services-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+    }
+
+    .service-card {
+      background: var(--card-bg-light);
+      border-radius: 15px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      transition: var(--transition);
+    }
+
+    body.dark-mode .service-card {
+      background: var(--card-bg-dark);
+    }
+
+    .service-card img {
+      width: 100%;
+      height: 200px;
+      object-fit: cover;
+    }
+
+    .service-info {
+      padding: 1.5rem;
+    }
+
+    .service-price {
+      font-size: 1.4rem;
+      font-weight: bold;
+      color: var(--primary);
+      margin: 0.5rem 0;
+    }
+
+    body.dark-mode .service-price {
+      color: var(--accent);
+    }
+
+    .btn {
+      display: inline-block;
+      width: 100%;
+      padding: 0.8rem;
+      text-align: center;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: var(--transition);
+      box-sizing: border-box;
+    }
+
+    .btn:hover {
+      background: var(--primary-light);
+    }
+
+    .support-section {
+      background: var(--card-bg-light);
+      padding: 3rem 1.5rem;
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      margin-top: 4rem;
+    }
+
+    body.dark-mode .support-section {
+      background: var(--card-bg-dark);
+    }
+
+    .support-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+      text-align: center;
+    }
+
+    .support-card {
+      padding: 1.5rem;
+      border-radius: 12px;
+      background: rgba(0,0,0,0.03);
+    }
+
+    body.dark-mode .support-card {
+      background: rgba(255,255,255,0.03);
+    }
+
+    .support-card i {
+      font-size: 2.5rem;
+      color: var(--primary);
+      margin-bottom: 1rem;
+    }
+
+    body.dark-mode .support-card i {
+      color: var(--accent);
+    }
+
+    footer {
+      background: #111;
+      color: #aaa;
+      padding: 3rem 1.5rem 1.5rem;
+      margin-top: 5rem;
+      text-align: center;
+    }
+
+    .social-links {
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      margin: 1.5rem 0;
+    }
+
+    .social-links a {
+      color: white;
+      font-size: 1.5rem;
+      transition: var(--transition);
+    }
+
+    .social-links a:hover {
+      color: var(--accent);
+    }
+
+    .floating-whatsapp {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background-color: #25d366;
+      color: white;
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 30px;
+      box-shadow: 2px 2px 10px rgba(0,0,0,0.3);
+      z-index: 1000;
+      text-decoration: none;
+      transition: var(--transition);
+    }
+
+    .floating-whatsapp:hover {
+      transform: scale(1.1);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="nav-container">
+      <a href="#" class="logo-container">
+        <img src="https://i.ibb.co/3m07W7g8/logo.jpg" alt="Serene Escape Logo" class="logo-img" onerror="this.src='https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=100&q=80'">
+        <span class="logo-text">Serene Escape</span>
+      </a>
+      <button class="theme-toggle" id="themeToggle"><i class="fas fa-moon"></i></button>
+    </div>
+  </header>
+
+  <section class="hero">
+    <h1>Serene Escape Massage & Spa</h1>
+    <p>Luxury Wellness & Therapeutic Relaxation in Beverly Hills, California</p>
+    <a href="#services" class="btn" style="width: auto; padding: 0.8rem 2rem;">Explore Treatments</a>
+  </section>
+
+  <div class="container" id="services">
+    <h2 class="section-title">Our Services</h2>
+    <div class="filters">
+      <button class="filter-btn active" onclick="filterServices('all')">All</button>
+      <button class="filter-btn" onclick="filterServices('massage')">Massages</button>
+      <button class="filter-btn" onclick="filterServices('facial')">Facials</button>
+      <button class="filter-btn" onclick="filterServices('package')">Packages</button>
+    </div>
+
+    <div class="services-grid">
+      <div class="service-card" data-category="massage">
+        <img src="https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=600&q=80" alt="Swedish Massage">
+        <div class="service-info">
+          <h3>Swedish Massage</h3>
+          <p>Gentle full-body massage designed to relax muscles and improve circulation.</p>
+          <div class="service-price">$120 / 60 Min</div>
+          <a href="https://wa.me/447735315807?text=Hello%20Serene%20Escape,%20I%20would%20like%20to%20book%20Swedish%20Massage%20($120).%20Please%20guide%20me%20through%20consultation%20and%20payment." class="btn" target="_blank">Book Session</a>
+        </div>
+      </div>
+
+      <div class="service-card" data-category="massage">
+        <img src="https://images.unsplash.com/photo-1519823551278-64ac92734fb1?auto=format&fit=crop&w=600&q=80" alt="Deep Tissue Massage">
+        <div class="service-info">
+          <h3>Deep Tissue Massage</h3>
+          <p>Targets deep muscle layers to relieve chronic tension and soreness.</p>
+          <div class="service-price">$150 / 60 Min</div>
+          <a href="https://wa.me/447735315807?text=Hello%20Serene%20Escape,%20I%20would%20like%20to%20book%20Deep%20Tissue%20Massage%20($150).%20Please%20guide%20me%20through%20consultation%20and%20payment." class="btn" target="_blank">Book Session</a>
+        </div>
+      </div>
+
+      <div class="service-card" data-category="facial">
+        <img src="https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&w=600&q=80" alt="Radiance Facial">
+        <div class="service-info">
+          <h3>Signature Radiance Facial</h3>
+          <p>Hydrating and revitalizing skin treatment for an instant glow.</p>
+          <div class="service-price">$130 / 50 Min</div>
+          <a href="https://wa.me/447735315807?text=Hello%20Serene%20Escape,%20I%20would%20like%20to%20book%20Signature%20Radiance%20Facial%20($130).%20Please%20guide%20me%20through%20consultation%20and%20payment." class="btn" target="_blank">Book Session</a>
+        </div>
+      </div>
+
+      <div class="service-card" data-category="package">
+        <img src="https://images.unsplash.com/photo-1515377905703-c4788e51af15?auto=format&fit=crop&w=600&q=80" alt="Ultimate Spa Day">
+        <div class="service-info">
+          <h3>Ultimate Spa Escape</h3>
+          <p>Full body massage + custom facial + aromatherapy session.</p>
+          <div class="service-price">$280 / 120 Min</div>
+          <a href="https://wa.me/447735315807?text=Hello%20Serene%20Escape,%20I%20would%20like%20to%20book%20Ultimate%20Spa%20Escape%20($280).%20Please%20guide%20me%20through%20consultation%20and%20payment." class="btn" target="_blank">Book Session</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Support Section -->
+    <div class="support-section">
+      <h2 class="section-title">Support & Enquiries</h2>
+      <div class="support-grid">
+        <div class="support-card">
+          <i class="fab fa-whatsapp"></i>
+          <h3>WhatsApp Us</h3>
+          <p>Instant booking & enquiries</p>
+          <a href="https://wa.me/447735315807?text=Hello%20Serene%20Escape,%20I%20have%20an%20inquiry" class="btn" style="margin-top:1rem;" target="_blank">Chat +447735315807</a>
+        </div>
+        <div class="support-card">
+          <i class="fab fa-instagram"></i>
+          <h3>Instagram</h3>
+          <p>Follow our daily relaxation posts</p>
+          <a href="https://instagram.com/bigi_egee" target="_blank" class="btn" style="margin-top:1rem;">@bigi_egee</a>
+        </div>
+        <div class="support-card">
+          <i class="fas fa-location-dot"></i>
+          <h3>California Location</h3>
+          <p>450 N Canon Dr, Beverly Hills, CA 90210, USA</p>
+          <p><strong>Open:</strong> Mon-Sat 9AM-8PM</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <p><strong>Serene Escape Massage & Spa</strong></p>
+    <p>Beverly Hills, California, USA</p>
+    <div class="social-links">
+      <a href="https://wa.me/447735315807" target="_blank"><i class="fab fa-whatsapp"></i></a>
+      <a href="https://instagram.com/bigi_egee" target="_blank"><i class="fab fa-instagram"></i></a>
+    </div>
+    <p>&copy; 2026 Serene Escape Massage & Spa. All Rights Reserved.</p>
+  </footer>
+
+  <!-- WhatsApp Floating Widget -->
+  <a href="https://wa.me/447735315807?text=Hello%20Serene%20Escape,%20I%20would%20like%20to%20book%20a%20session!" class="floating-whatsapp" target="_blank">
+    <i class="fab fa-whatsapp"></i>
+  </a>
+
+  <script>
+    const themeToggle = document.getElementById('themeToggle');
+    themeToggle.addEventListener('click', () => {
+      document.body.classList.toggle('dark-mode');
+      const isDark = document.body.classList.contains('dark-mode');
+      themeToggle.innerHTML = isDark ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+    });
+
+    function filterServices(category) {
+      document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+      
+      const cards = document.querySelectorAll('.service-card');
+      cards.forEach(card => {
+        if (category === 'all' || card.dataset.category === category) {
+          card.style.display = 'block';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+    }
+  </script>
+</body>
+</html>
