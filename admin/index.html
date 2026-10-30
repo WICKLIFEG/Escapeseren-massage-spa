@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Bookings Admin</title>
+<style>
+  :root { --bg:#f6f3ee; --card:#fff; --ink:#2b2b2b; --muted:#777; --accent:#5f7f6b; --line:#e4ded5; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--ink); }
+  header { padding:16px; background:var(--accent); color:#fff; display:flex; justify-content:space-between; align-items:center; }
+  h1 { font-size:18px; margin:0; }
+  main { max-width:760px; margin:0 auto; padding:16px; }
+  .login { max-width:340px; margin:60px auto; background:var(--card); padding:20px; border-radius:12px; border:1px solid var(--line); }
+  input, select { width:100%; padding:12px; font-size:16px; border:1px solid var(--line); border-radius:8px; margin-bottom:10px; }
+  button { padding:10px 14px; font-size:14px; border:0; border-radius:8px; background:var(--accent); color:#fff; cursor:pointer; }
+  button.ghost { background:transparent; color:#fff; border:1px solid #fff8; }
+  button.warn { background:#b5524a; }
+  button.alt { background:#8a8a8a; }
+  .filters { display:flex; gap:8px; margin-bottom:12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:12px; }
+  .row { display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+  .muted { color:var(--muted); font-size:14px; }
+  .badge { font-size:12px; padding:3px 8px; border-radius:20px; background:#eee; }
+  .badge.pending { background:#fff0c2; } .badge.confirmed { background:#cfe9d6; }
+  .badge.completed { background:#d6e2f5; } .badge.cancelled { background:#f5d3d0; }
+  .actions { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .err { color:#b5524a; margin:8px 0; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<div id="loginView" class="login">
+  <h1 style="color:var(--ink)">Admin login</h1>
+  <p class="muted">Enter the admin password.</p>
+  <input id="pw" type="password" placeholder="Password" autocomplete="current-password">
+  <button id="loginBtn" style="width:100%">Sign in</button>
+  <div id="loginErr" class="err"></div>
+</div>
+
+<div id="appView" class="hidden">
+  <header><h1>Bookings</h1><button class="ghost" id="logout">Log out</button></header>
+  <main>
+    <div class="filters">
+      <select id="statusFilter">
+        <option value="">All statuses</option>
+        <option value="pending">Pending</option>
+        <option value="confirmed">Confirmed</option>
+        <option value="completed">Completed</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+      <button id="refresh">Refresh</button>
+    </div>
+    <div id="list"></div>
+  </main>
+</div>
+
+<script>
+const API = "/api/admin/bookings";
+let token = sessionStorage.getItem("adminToken") || "";
+let bookings = [];
+const $ = (id) => document.getElementById(id);
+
+function el(tag, props = {}, ...kids) {
+  const n = document.createElement(tag);
+  Object.assign(n, props);
+  kids.forEach((k) => n.append(k));
+  return n;
+}
+
+async function api(method, body) {
+  const res = await fetch(API, {
+    method,
+    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(data.error || "Request failed"), { status: res.status });
+  return data;
+}
+
+async function load() {
+  const data = await api("GET");
+  bookings = data.bookings;
+  $("loginView").classList.add("hidden");
+  $("appView").classList.remove("hidden");
+  render();
+}
+
+function render() {
+  const f = $("statusFilter").value;
+  const list = $("list");
+  list.replaceChildren();
+  const shown = bookings.filter((b) => !f || b.status === f);
+  if (!shown.length) list.append(el("p", { className: "muted", textContent: "No bookings yet." }));
+  shown.forEach((b) => {
+    const actions = el("div", { className: "actions" });
+    const add = (label, status, cls = "") => {
+      const btn = el("button", { textContent: label, className: cls });
+      btn.onclick = async () => {
+        if (status === "cancelled" && !confirm("Cancel this booking and free the time slot?")) return;
+        try { await api("PATCH", { key: b.key, status }); await load(); }
+        catch (e) { alert(e.message); }
+      };
+      actions.append(btn);
+    };
+    if (b.status === "pending") { add("Confirm", "confirmed"); add("Cancel", "cancelled", "warn"); }
+    if (b.status === "confirmed") { add("Mark completed", "completed"); add("Cancel", "cancelled", "warn"); }
+
+    const phoneLink = el("a", { href: "tel:" + b.phone.replace(/[^\d+]/g, ""), textContent: b.phone });
+    const wa = el("a", { href: "https://wa.me/" + b.phone.replace(/\D/g, ""), target: "_blank", rel: "noopener", textContent: "WhatsApp" });
+
+    const card = el("div", { className: "card" },
+      el("div", { className: "row" },
+        el("strong", { textContent: b.serviceName + " ($" + b.price + ")" }),
+        el("span", { className: "badge " + b.status, textContent: b.status })),
+      el("div", { textContent: b.date + " at " + b.time + " (" + b.minutes + " min)" }),
+      el("div", { className: "muted", textContent: "Payment: " + ((b.payment && b.payment.status) || "unpaid") +
+        (b.payment && b.payment.method ? " via " + b.payment.method + (b.payment.coin ? " (" + b.payment.coin + ")" : "") : "") }),
+      el("div", { className: "muted" }, b.name + " · ", phoneLink, " · ", wa),
+      ...(b.email ? [el("div", { className: "muted", textContent: b.email })] : []),
+      ...(b.notes ? [el("div", { className: "muted", textContent: "Notes: " + b.notes })] : []),
+      actions);
+    list.append(card);
+  });
+}
+
+async function tryLogin() {
+  token = $("pw").value;
+  try {
+    await load();
+    sessionStorage.setItem("adminToken", token);
+  } catch (e) {
+    $("loginErr").textContent = e.status === 401 ? "Wrong password." : e.message;
+  }
+}
+
+$("loginBtn").onclick = tryLogin;
+$("pw").onkeydown = (e) => { if (e.key === "Enter") tryLogin(); };
+$("refresh").onclick = () => load().catch((e) => alert(e.message));
+$("statusFilter").onchange = render;
+$("logout").onclick = () => { sessionStorage.removeItem("adminToken"); location.reload(); };
+
+if (token) load().catch(() => sessionStorage.removeItem("adminToken"));
+</script>
+</body>
+</html>
