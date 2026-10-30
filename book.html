@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Book an appointment</title>
+<style>
+  body{margin:0;background:#f6f3ee;color:#2b2b2b;font-family:system-ui,sans-serif}
+  .top{padding:14px 16px;background:#5f7f6b;color:#fff}
+  .top a{color:#fff;text-decoration:none;font-weight:600}
+</style>
+</head>
+<body>
+<div class="top"><a href="/">&larr; Back to Serene Escape</a></div>
+
+<section id="book" style="max-width:480px;margin:24px auto;padding:0 16px">
+  <h2>Book an appointment</h2>
+  <form id="bookingForm">
+    <select name="service" required>
+      <option value="">Choose a service</option>
+      <option value="swedish">Swedish Massage - $120</option>
+      <option value="deep-tissue">Deep Tissue Massage - $150</option>
+      <option value="facial">Signature Radiance Facial - $130</option>
+      <option value="spa-escape">Ultimate Spa Escape - $280</option>
+    </select>
+    <input type="date" name="date" required>
+    <select name="time" required><option value="">Pick a date and service first</option></select>
+    <input name="name" placeholder="Your name" required>
+    <input name="phone" type="tel" placeholder="Phone / WhatsApp (with country code)" required>
+    <input name="email" type="email" placeholder="Email (optional)">
+    <textarea name="notes" placeholder="Notes (optional)" rows="3"></textarea>
+    <input name="website" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
+    <button type="submit" id="bookBtn">Request booking</button>
+    <p id="bookingMsg" role="status"></p>
+  </form>
+
+  <div id="payPanel" style="display:none">
+    <h3>Pay to secure your time</h3>
+    <p id="payAmount"></p>
+    <button type="button" data-method="card" id="payCard">Pay by card (Visa / Mastercard)</button>
+    <button type="button" data-method="paypal" id="payPaypal">Pay with PayPal</button>
+    <div id="cryptoBox">
+      <select id="coin">
+        <option value="btc">Bitcoin (BTC)</option>
+        <option value="ltc">Litecoin (LTC)</option>
+        <option value="usdttrc20">USDT (TRC20)</option>
+        <option value="usdterc20">USDT (ERC20)</option>
+      </select>
+      <button type="button" data-method="crypto" id="payCrypto">Pay with crypto</button>
+    </div>
+    <p id="payMsg" role="status"></p>
+  </div>
+
+  <style>
+    #book input,#book select,#book textarea{width:100%;padding:12px;margin-bottom:10px;font-size:16px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box}
+    #book button{width:100%;padding:14px;margin-bottom:10px;font-size:16px;border:0;border-radius:8px;background:#5f7f6b;color:#fff;cursor:pointer}
+  </style>
+</section>
+
+<script>
+(() => {
+  const form = document.getElementById("bookingForm");
+  const msg = document.getElementById("bookingMsg");
+  const timeSel = form.time;
+  const panel = document.getElementById("payPanel");
+  let bookingId = null;
+  form.date.min = new Date().toISOString().slice(0, 10);
+
+  async function loadSlots() {
+    const service = form.service.value, date = form.date.value;
+    if (!service || !date) return;
+    timeSel.innerHTML = "<option value=''>Loading...</option>";
+    const res = await fetch(`/api/availability?date=${date}&service=${service}`);
+    const data = await res.json();
+    if (!res.ok || !data.slots.length) {
+      timeSel.innerHTML = "<option value=''>No times available that day</option>";
+      return;
+    }
+    timeSel.innerHTML = "<option value=''>Choose a time</option>" +
+      data.slots.map((t) => `<option value="${t}">${t}</option>`).join("");
+  }
+  form.service.addEventListener("change", loadSlots);
+  form.date.addEventListener("change", loadSlots);
+
+  async function showPayment(message) {
+    const res = await fetch("/api/pay");
+    const { methods, depositPercent } = await res.json();
+    document.getElementById("payCard").style.display = methods.card ? "" : "none";
+    document.getElementById("payPaypal").style.display = methods.paypal ? "" : "none";
+    document.getElementById("cryptoBox").style.display = methods.crypto ? "" : "none";
+    document.getElementById("payAmount").textContent = depositPercent < 100
+      ? `A ${depositPercent}% deposit is taken online; the rest is paid at your visit.`
+      : "Choose how you'd like to pay.";
+    if (!methods.card && !methods.paypal && !methods.crypto) {
+      msg.textContent = message + " We will contact you about payment.";
+      return;
+    }
+    panel.style.display = "block";
+    panel.scrollIntoView({ behavior: "smooth" });
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    msg.textContent = "Sending...";
+    const res = await fetch("/api/book", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(Object.fromEntries(new FormData(form))),
+    });
+    const data = await res.json().catch(() => ({}));
+    msg.textContent = data.message || data.error || "Something went wrong.";
+    if (res.ok && data.id) {
+      bookingId = data.id;
+      document.getElementById("bookBtn").disabled = true;
+      await showPayment(data.message);
+    } else if (res.status === 409) loadSlots();
+  });
+
+  panel.addEventListener("click", async (e) => {
+    const method = e.target.dataset && e.target.dataset.method;
+    if (!method || !bookingId) return;
+    const pm = document.getElementById("payMsg");
+    pm.textContent = "Taking you to secure payment...";
+    const res = await fetch("/api/pay", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bookingId, method, coin: document.getElementById("coin").value }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.url) window.location.href = data.url;
+    else pm.textContent = data.error || "Couldn't start payment.";
+  });
+})();
+</script>
+</body>
+</html>
