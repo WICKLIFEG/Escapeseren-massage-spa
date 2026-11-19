@@ -9,35 +9,38 @@ import {
   saveBooking,
   paypalBase,
   paypalToken,
+  mpesaBase,
+  mpesaToken,
+  mpesaTimestamp,
+  mpesaPassword,
+  kesAmount,
+  normalizeKenyanPhone,
 } from "./_payments.mjs";
 
 const CRYPTO_COINS = ["btc", "ltc", "usdttrc20", "usdterc20"]; // NOWPayments codes
 
-async function stripeCheckout(id, booking, cents, base) {
-  const p = new URLSearchParams({
-    mode: "payment",
-    success_url: `${base}/payment-success.html?booking=${id}`,
-    cancel_url: `${base}/payment-cancelled.html?booking=${id}`,
-    client_reference_id: id,
-    "metadata[bookingId]": id,
-    "payment_intent_data[metadata][bookingId]": id,
-    "line_items[0][quantity]": "1",
-    "line_items[0][price_data][currency]": "usd",
-    "line_items[0][price_data][unit_amount]": String(cents),
-    "line_items[0][price_data][product_data][name]": `${booking.serviceName} - ${booking.date} ${booking.time}`,
-  });
-  if (booking.email) p.set("customer_email", booking.email);
-  const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+// Card payments via Paystack: returns a secure Paystack page for the customer to pay on.
+async function paystackInit(id, booking, cents, base) {
+  const kes = kesAmount(cents);
+  // Paystack allows only letters, numbers, - . = in a reference.
+  const reference = `se-${id}-${Date.now().toString(36)}`;
+  const email = booking.email || `guest-${id.slice(0, 8)}@${new URL(base).hostname}`;
+  const res = await fetch("https://api.paystack.co/transaction/initialize", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${env("STRIPE_SECRET_KEY")}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: p,
+    headers: { Authorization: `Bearer ${env("PAYSTACK_SECRET_KEY")}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email,
+      amount: kes * 100, // Paystack counts in the smallest unit (cents)
+      currency: "KES",
+      reference,
+      channels: ["card"],
+      callback_url: `${base}/api/paystack-return?booking=${id}`,
+      metadata: { bookingId: id, service: booking.serviceName },
+    }),
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error?.message || "Stripe error");
-  return { url: data.url, ref: data.id };
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.status || !data.data?.authorization_url) throw new Error(data.message || "Paystack error");
+  return { url: data.data.authorization_url, ref: reference, kes };
 }
 
 async function paypalOrder(id, booking, cents, base) {
@@ -94,6 +97,35 @@ async function cryptoInvoice(id, booking, cents, base, coin) {
   return { url: data.invoice_url, ref: String(data.id) };
 }
 
+// Sends the M-Pesa prompt (STK Push) to the customer's phone.
+async function mpesaPush(id, booking, kes, phone, base) {
+  const token = await mpesaToken();
+  const ts = mpesaTimestamp();
+  const isTill = env("MPESA_TYPE") === "till"; // "till" = Buy Goods, otherwise Paybill
+  const shortcode = env("MPESA_SHORTCODE");
+  const res = await fetch(`${mpesaBase()}/mpesa/stkpush/v1/processrequest`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      BusinessShortCode: shortcode,
+      Password: mpesaPassword(ts),
+      Timestamp: ts,
+      TransactionType: isTill ? "CustomerBuyGoodsOnline" : "CustomerPayBillOnline",
+      Amount: kes,
+      PartyA: phone,
+      PartyB: isTill ? env("MPESA_TILL") || shortcode : shortcode,
+      PhoneNumber: phone,
+      // Daraja rejects callback URLs containing words like "mpesa", so this path avoids them.
+      CallBackURL: `${base}/api/webhooks/kenya-pay?booking=${id}&k=${encodeURIComponent(env("MPESA_CALLBACK_SECRET"))}`,
+      AccountReference: "SereneEscape",
+      TransactionDesc: booking.serviceName.slice(0, 20),
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.ResponseCode !== "0") throw new Error(data.errorMessage || data.ResponseDescription || "M-Pesa error");
+  return { ref: data.CheckoutRequestID };
+}
+
 // GET  /api/pay                      -> which payment methods are switched on
 // POST /api/pay {bookingId, method, coin?} -> { url } to send the customer to
 export default async (req) => {
@@ -105,7 +137,7 @@ export default async (req) => {
 
   const methods = availableMethods();
   const method = body.method;
-  if (!["card", "paypal", "crypto"].includes(method) || !methods[method])
+  if (!["card", "paypal", "crypto", "mpesa"].includes(method) || !methods[method])
     return json({ error: "That payment method isn't available." }, 400);
 
   const found = await getBookingById(body.bookingId);
@@ -118,15 +150,45 @@ export default async (req) => {
   if (!base) return json({ error: "Server is missing SITE_URL." }, 500);
   const cents = amountCents(booking);
 
+  if (method === "mpesa") {
+    const phone = normalizeKenyanPhone(body.mpesaPhone);
+    if (!phone) return json({ error: "Enter a valid Safaricom number, e.g. 0712345678." }, 400);
+    const kes = kesAmount(cents);
+    try {
+      const out = await mpesaPush(body.bookingId, booking, kes, phone, base);
+      booking.payment = {
+        ...booking.payment,
+        status: "awaiting",
+        method: "mpesa",
+        reference: out.ref,
+        expectedCents: cents,
+        expectedKes: kes,
+        phoneLast4: phone.slice(-4),
+      };
+      await saveBooking(key, booking);
+      return json({ pending: true, kes, message: `Check your phone: enter your M-Pesa PIN to pay KES ${kes}.` });
+    } catch (e) {
+      console.error("mpesa push error", e.message);
+      return json({ error: "Couldn't send the M-Pesa prompt. Check the number and try again." }, 502);
+    }
+  }
+
   try {
     let out;
-    if (method === "card") out = await stripeCheckout(body.bookingId, booking, cents, base);
+    if (method === "card") out = await paystackInit(body.bookingId, booking, cents, base);
     else if (method === "paypal") out = await paypalOrder(body.bookingId, booking, cents, base);
     else {
       const coin = CRYPTO_COINS.includes(body.coin) ? body.coin : undefined;
       out = await cryptoInvoice(body.bookingId, booking, cents, base, coin);
     }
-    booking.payment = { ...booking.payment, status: "awaiting", method, reference: out.ref, expectedCents: cents };
+    booking.payment = {
+      ...booking.payment,
+      status: "awaiting",
+      method,
+      reference: out.ref,
+      expectedCents: cents,
+      ...(out.kes ? { expectedKes: out.kes } : {}),
+    };
     await saveBooking(key, booking);
     return json({ url: out.url });
   } catch (e) {
