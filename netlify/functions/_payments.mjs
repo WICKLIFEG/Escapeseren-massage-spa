@@ -17,11 +17,70 @@ export const centsToDecimal = (c) => (c / 100).toFixed(2);
 
 export function availableMethods() {
   return {
-    card: !!env("STRIPE_SECRET_KEY"), // Visa, Mastercard, Amex, Apple/Google Pay
+    card: !!env("PAYSTACK_SECRET_KEY"), // Visa / Mastercard via Paystack (pays out in Kenya)
     paypal: !!(env("PAYPAL_CLIENT_ID") && env("PAYPAL_CLIENT_SECRET")),
     crypto: !!env("NOWPAYMENTS_API_KEY"), // BTC, LTC, USDT
+    mpesa: !!(
+      env("MPESA_CONSUMER_KEY") &&
+      env("MPESA_CONSUMER_SECRET") &&
+      env("MPESA_SHORTCODE") &&
+      env("MPESA_PASSKEY") &&
+      env("MPESA_CALLBACK_SECRET").length >= 12
+    ),
   };
 }
+
+// ---------- Card payments (Paystack) ----------
+export async function paystackVerify(reference) {
+  const res = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+    headers: { Authorization: `Bearer ${env("PAYSTACK_SECRET_KEY")}` },
+  });
+  const j = await res.json().catch(() => ({}));
+  return res.ok && j.status === true ? j.data : null;
+}
+
+// Counts only if Paystack says it succeeded, in KES, for exactly the amount we asked for.
+export const paystackMatches = (data, booking) =>
+  !!data &&
+  data.status === "success" &&
+  data.currency === "KES" &&
+  data.reference === booking.payment?.reference &&
+  data.amount === booking.payment?.expectedKes * 100;
+
+// ---------- M-Pesa (Safaricom Daraja) ----------
+export const mpesaBase = () =>
+  env("MPESA_ENV") === "live" ? "https://api.safaricom.co.ke" : "https://sandbox.safaricom.co.ke";
+
+// M-Pesa charges whole Kenyan shillings. Rate = KES per 1 USD (set KES_PER_USD).
+export const kesAmount = (cents) => Math.ceil((cents / 100) * Number(env("KES_PER_USD") || 130));
+
+// Accepts 07XXXXXXXX, 01XXXXXXXX, 7XXXXXXXX, +2547XXXXXXXX, 2547XXXXXXXX -> 2547XXXXXXXX
+export function normalizeKenyanPhone(input) {
+  const d = String(input || "").replace(/[^\d]/g, "");
+  let n = d;
+  if (/^0[17]\d{8}$/.test(d)) n = "254" + d.slice(1);
+  else if (/^[17]\d{8}$/.test(d)) n = "254" + d;
+  return /^254[17]\d{8}$/.test(n) ? n : null;
+}
+
+export async function mpesaToken() {
+  const auth = Buffer.from(`${env("MPESA_CONSUMER_KEY")}:${env("MPESA_CONSUMER_SECRET")}`).toString("base64");
+  const res = await fetch(`${mpesaBase()}/oauth/v1/generate?grant_type=client_credentials`, {
+    headers: { Authorization: `Basic ${auth}` },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.access_token) throw new Error("M-Pesa auth failed");
+  return data.access_token;
+}
+
+export function mpesaTimestamp() {
+  const d = new Date();
+  const p = (n, l = 2) => String(n).padStart(l, "0");
+  return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
+}
+
+export const mpesaPassword = (timestamp) =>
+  Buffer.from(`${env("MPESA_SHORTCODE")}${env("MPESA_PASSKEY")}${timestamp}`).toString("base64");
 
 export async function getBookingById(id) {
   if (typeof id !== "string" || !/^[0-9a-f-]{36}$/.test(id)) return null;
