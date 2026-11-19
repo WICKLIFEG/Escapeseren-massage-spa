@@ -17,4 +17,143 @@
   <h2>Book an appointment</h2>
   <form id="bookingForm">
     <select name="service" required>
-      <option
+      <option value="">Choose a service</option>
+      <option value="swedish">Swedish Massage - $120</option>
+      <option value="deep-tissue">Deep Tissue Massage - $150</option>
+      <option value="facial">Signature Radiance Facial - $130</option>
+      <option value="spa-escape">Ultimate Spa Escape - $280</option>
+    </select>
+    <input type="date" name="date" required>
+    <select name="time" required><option value="">Pick a date and service first</option></select>
+    <input name="name" placeholder="Your name" required>
+    <input name="phone" type="tel" placeholder="Phone / WhatsApp (with country code)" required>
+    <input name="email" type="email" placeholder="Email (optional)">
+    <textarea name="notes" placeholder="Notes (optional)" rows="3"></textarea>
+    <input name="website" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
+    <button type="submit" id="bookBtn">Request booking</button>
+    <p id="bookingMsg" role="status"></p>
+  </form>
+
+  <div id="payPanel" style="display:none">
+    <h3>Pay to secure your time</h3>
+    <p id="payAmount"></p>
+    <button type="button" data-method="card" id="payCard">Pay by card (Visa / Mastercard)</button>
+    <button type="button" data-method="paypal" id="payPaypal">Pay with PayPal</button>
+    <div id="mpesaBox">
+      <input id="mpesaPhone" type="tel" placeholder="M-Pesa number, e.g. 0712345678">
+      <button type="button" data-method="mpesa" id="payMpesa">Pay with M-Pesa</button>
+    </div>
+    <div id="cryptoBox">
+      <select id="coin">
+        <option value="btc">Bitcoin (BTC)</option>
+        <option value="ltc">Litecoin (LTC)</option>
+        <option value="usdttrc20">USDT (TRC20)</option>
+        <option value="usdterc20">USDT (ERC20)</option>
+      </select>
+      <button type="button" data-method="crypto" id="payCrypto">Pay with crypto</button>
+    </div>
+    <p id="payMsg" role="status"></p>
+  </div>
+
+  <style>
+    #book input,#book select,#book textarea{width:100%;padding:12px;margin-bottom:10px;font-size:16px;border:1px solid #ccc;border-radius:8px;box-sizing:border-box}
+    #book button{width:100%;padding:14px;margin-bottom:10px;font-size:16px;border:0;border-radius:8px;background:#5f7f6b;color:#fff;cursor:pointer}
+    #book button:disabled{opacity:.6}
+  </style>
+</section>
+
+<script>
+(() => {
+  const form = document.getElementById("bookingForm");
+  const msg = document.getElementById("bookingMsg");
+  const timeSel = form.time;
+  const panel = document.getElementById("payPanel");
+  const pm = document.getElementById("payMsg");
+  let bookingId = null;
+  form.date.min = new Date().toISOString().slice(0, 10);
+
+  async function loadSlots() {
+    const service = form.service.value, date = form.date.value;
+    if (!service || !date) return;
+    timeSel.innerHTML = "<option value=''>Loading...</option>";
+    const res = await fetch(`/api/availability?date=${date}&service=${service}`);
+    const data = await res.json();
+    if (!res.ok || !data.slots.length) {
+      timeSel.innerHTML = "<option value=''>No times available that day</option>";
+      return;
+    }
+    timeSel.innerHTML = "<option value=''>Choose a time</option>" +
+      data.slots.map((t) => `<option value="${t}">${t}</option>`).join("");
+  }
+  form.service.addEventListener("change", loadSlots);
+  form.date.addEventListener("change", loadSlots);
+
+  async function showPayment(message) {
+    const res = await fetch("/api/pay");
+    const { methods, depositPercent } = await res.json();
+    document.getElementById("payCard").style.display = methods.card ? "" : "none";
+    document.getElementById("payPaypal").style.display = methods.paypal ? "" : "none";
+    document.getElementById("mpesaBox").style.display = methods.mpesa ? "" : "none";
+    document.getElementById("cryptoBox").style.display = methods.crypto ? "" : "none";
+    document.getElementById("payAmount").textContent = depositPercent < 100
+      ? `A ${depositPercent}% deposit is taken online; the rest is paid at your visit.`
+      : "Choose how you'd like to pay.";
+    if (!methods.card && !methods.paypal && !methods.crypto && !methods.mpesa) {
+      msg.textContent = message + " We will contact you about payment.";
+      return;
+    }
+    panel.style.display = "block";
+    panel.scrollIntoView({ behavior: "smooth" });
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    msg.textContent = "Sending...";
+    const res = await fetch("/api/book", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(Object.fromEntries(new FormData(form))),
+    });
+    const data = await res.json().catch(() => ({}));
+    msg.textContent = data.message || data.error || "Something went wrong.";
+    if (res.ok && data.id) {
+      bookingId = data.id;
+      document.getElementById("bookBtn").disabled = true;
+      await showPayment(data.message);
+    } else if (res.status === 409) loadSlots();
+  });
+
+  // After the M-Pesa prompt is sent, wait here until Safaricom confirms (up to ~2 minutes).
+  async function waitForMpesa() {
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 4000));
+      const r = await fetch(`/api/pay-status?booking=${bookingId}`);
+      const d = await r.json().catch(() => ({}));
+      if (d.status === "paid") { window.location.href = `/payment-success.html?booking=${bookingId}`; return; }
+      if (d.status === "failed") { pm.textContent = "The M-Pesa payment was not completed. You can try again."; return; }
+    }
+    pm.textContent = "Still waiting. If you already paid, your booking will be confirmed shortly.";
+  }
+
+  panel.addEventListener("click", async (e) => {
+    const method = e.target.dataset && e.target.dataset.method;
+    if (!method || !bookingId) return;
+    pm.textContent = method === "mpesa" ? "Sending the M-Pesa prompt to your phone..." : "Taking you to secure payment...";
+    const res = await fetch("/api/pay", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bookingId, method,
+        coin: document.getElementById("coin").value,
+        mpesaPhone: document.getElementById("mpesaPhone").value,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.url) window.location.href = data.url;
+    else if (res.ok && data.pending) { pm.textContent = data.message; waitForMpesa(); }
+    else pm.textContent = data.error || "Couldn't start payment.";
+  });
+})();
+</script>
+</body>
+</html>
